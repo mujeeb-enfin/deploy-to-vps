@@ -4,6 +4,8 @@ A reusable GitHub Action that deploys a project to a VPS over SSH — Node.js + 
 
 **Intended for public use.** Drop the action into any repo via `mujeeb-enfin/git-actions@v1`; configure three secrets (`VPS_HOST`, `VPS_USERNAME`, `VPS_SSH_KEY`); publish a release.
 
+> Looking for the consolidated developer checklist (required secrets, VPS prerequisites, scanner configuration, local tooling, versioning)? See [**`requirements.md`**](./requirements.md).
+
 ## Status
 
 [![CI](https://github.com/mujeeb-enfin/git-actions/actions/workflows/test.yml/badge.svg)](../../actions/workflows/test.yml)
@@ -28,11 +30,22 @@ A reusable GitHub Action that deploys a project to a VPS over SSH — Node.js + 
 | `.github/workflows/trivy.yml` | Filesystem vuln + IaC + secret scan on every push, PR, and weekly. |
 | `.github/workflows/sonarqube.yml` | Static analysis (requires `SONAR_TOKEN` secret). |
 | `.github/workflows/zap.yml` | Passive URL scan (requires `SCAN_TARGET_URL` variable). |
+| `.github/dependabot.yml` | Weekly GitHub Actions SHA-update PRs. |
+| `.github/CODEOWNERS` | Required-reviewer routing. |
+| `.github/CODE_OF_CONDUCT.md` | Contributor Covenant v2.1. |
+| `.github/ISSUE_TEMPLATE/` | Structured bug-report and feature-request forms. |
+| `.github/PULL_REQUEST_TEMPLATE.md` | PR checklist. |
 | `.yamllint.yml` | Yamllint configuration used by `test.yml`. |
+| `requirements.md` | Consolidated developer checklist (secrets, VPS prerequisites, scanners, local tooling, versioning). |
+| `CHANGELOG.md` | Per-release notes (Keep a Changelog format). |
+| `CONTRIBUTING.md` | PR conventions, commit format, coding standards. |
+| `SECURITY.md` | Private vulnerability disclosure policy. |
 | `LICENSE` | MIT. |
 | `README.md` | This document. |
 
 ## Quick Start
+
+> **Before you copy this:** replace `<your-project>` and `<your-pm2-app>` with the real values for your app, and make sure you've completed the [VPS prerequisites](#4-vps-prerequisites) for your chosen strategy.
 
 ```yaml
 name: Deploy
@@ -51,13 +64,15 @@ jobs:
           vps_host: ${{ secrets.VPS_HOST }}
           vps_username: ${{ secrets.VPS_USERNAME }}
           vps_ssh_key: ${{ secrets.VPS_SSH_KEY }}
-          project_path: ~/projects/myapp
+          project_path: ~/projects/<your-project>
           strategy: node-pm2          # or: node-docker, static, custom
-          pm2_app_name: myapp
+          pm2_app_name: <your-pm2-app>
           ref: ${{ github.event.release.tag_name }}
 ```
 
 Set three secrets (`VPS_HOST`, `VPS_USERNAME`, `VPS_SSH_KEY`) and publish a release. That's it.
+
+> ⚠️ **Note on `@v1`:** This ref resolves only after the maintainer tags a `v1.x.x` release in this repo. Until then, pin to a specific commit SHA (see [requirements.md](requirements.md) §6).
 
 ---
 
@@ -568,6 +583,7 @@ The shell snippet you pass via `custom_script` runs in the SSH session with the 
 - [`.github/workflows/release.yml`](./.github/workflows/release.yml) — `node-docker` example consumer (release trigger, default strategy).
 - [`.github/workflows/release-pm2.yml`](./.github/workflows/release-pm2.yml) — `node-pm2` example consumer (release trigger).
 - [`.github/workflows/branch.yml`](./.github/workflows/branch.yml) — `node-docker` example consumer (push to `develop` branch).
+- [`requirements.md`](./requirements.md) — consolidated checklist for developers: secrets, VPS prerequisites, scanner configuration, local tooling, versioning model.
 
 ## External References
 

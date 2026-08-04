@@ -1,0 +1,9 @@
+# CODEOWNERS — assigns reviewers for paths in this repository.
+
+# Default: the maintainer reviews everything.
+/*  @mujeeb-enfin
+
+# Highest-scrutiny surfaces.
+/action.yml          @mujeeb-enfin
+/.github/workflows/  @mujeeb-enfin
+/README.md           @mujeeb-enfin

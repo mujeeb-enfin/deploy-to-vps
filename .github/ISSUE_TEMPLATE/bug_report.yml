@@ -1,0 +1,67 @@
+name: Bug report
+description: Report a problem with the action or its example workflows.
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to file a bug. Please fill out the template below.
+
+  - type: input
+    id: version
+    attributes:
+      label: Action version
+      description: Which version of the action are you using? (e.g. v1.0.0, @main, commit SHA)
+      placeholder: v1.0.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: strategy
+    attributes:
+      label: Strategy
+      description: Which deploy strategy is in use?
+      options:
+        - node-pm2
+        - node-docker
+        - static
+        - custom
+        - other / not applicable
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: A clear, concise description of the bug.
+      placeholder: I expected X but Y happened.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Workflow YAML, VPS OS, relevant secrets (redact!).
+      render: yaml
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Paste the relevant section of the Actions run log here.
+
+  - type: input
+    id: runner
+    attributes:
+      label: Runner OS
+      placeholder: ubuntu-latest

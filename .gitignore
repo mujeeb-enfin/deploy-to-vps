@@ -1,2 +1,22 @@
-.mrcoder
-.vscode
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local tooling
+.mrcoder/
+
+# Build artifacts
+dist/
+build/
+node_modules/
+*.log
+npm-debug.log*
+
+# Scanner output
+reports/
+*.sarif
+.trivy/
+.owasp/
