@@ -112,7 +112,7 @@ This repository runs five security scanners on every push and PR. Each one is al
 
 ### Reporting a vulnerability
 
-Please do **not** open a public GitHub issue for security problems. Use GitHub's private vulnerability reporting (Security tab → Report a vulnerability) or email `security@mrinnovations.dev`.
+Please do **not** open a public GitHub issue for security problems. Use GitHub's private vulnerability reporting (Security tab → Report a vulnerability) or email `security@mr-innovations.com`.
 
 ## License
 
@@ -122,7 +122,7 @@ Please do **not** open a public GitHub issue for security problems. Use GitHub's
 
 ## Maintainer
 
-This action is published and maintained by **Mujeeb Rahman** — project manager by trade, software engineer at heart, and founder of **[MR INNOVATIONS](https://mrinnovations.dev)**.
+This action is published and maintained by **Mujeeb Rahman** — project manager by trade, software engineer at heart, and founder of **[MR INNOVATIONS](https://mr-innovations.com)**.
 
 ### Other products from MR INNOVATIONS
 
@@ -514,6 +514,87 @@ Existing consumers who do not change their workflow keep getting the Node + Dock
 ```
 
 > ⚠️ `custom_script` runs with the full privileges of the SSH user on the VPS — review §7.5 before using it.
+
+### Using the example workflow files
+
+This repo ships three ready-to-copy workflow files under `.github/workflows/`. Pick the one that matches your setup, copy it into your own repo, and edit the marked fields.
+
+#### Which example should I copy?
+
+| Example | Use when | Trigger | Strategy |
+|---|---|---|---|
+| **`release.yml`** | You cut a GitHub Release to deploy (recommended for production). | `release: published` + `workflow_dispatch` | `node-docker` |
+| **`release-pm2.yml`** | Same as above, but for plain Node apps managed by PM2. | `release: published` + `workflow_dispatch` | `node-pm2` |
+| **`branch.yml`** | Every push to `develop` should auto-deploy. | `push: branches: [develop]` | `node-docker` |
+
+> **Not sure which to pick?** Start with `release.yml`. The release-trigger model is safer than push-to-branch because it requires an explicit `gh release create` (or click in the GitHub UI) to deploy.
+
+#### Step-by-step
+
+1. **Copy the file** into your own repo at `.github/workflows/deploy.yml` (you can rename it):
+
+   ```bash
+   mkdir -p .github/workflows
+   curl -o .github/workflows/deploy.yml \
+     https://raw.githubusercontent.com/mujeeb-enfin/git-actions/v1/.github/workflows/release.yml
+   ```
+
+2. **Edit the placeholder values** in the file you just copied. The lines you'll almost certainly need to change:
+
+   | Field | What to put |
+   |---|---|
+   | `uses: mujeeb-enfin/git-actions@v1` | Already correct — leave it. |
+   | `project_path:` | The absolute or `~`-relative path on the VPS where your code lives. E.g. `~/projects/myapp`. |
+   | `strategy:` | `node-pm2`, `node-docker`, `static`, or `custom`. |
+   | `pm2_app_name:` (PM2 only) | The name you registered with `pm2 start`. E.g. `myapp`. |
+   | `compose_file:` (Docker only) | Optional. Defaults to `compose.yaml`. |
+   | `node_version:` | The Node major version installed on the VPS. Default `22`. |
+   | `branches: [develop]` (branch.yml only) | The branch name that should trigger deploys. |
+
+3. **Set the three required secrets** in your repo (Settings → Secrets and variables → Actions):
+
+   | Secret | Value |
+   |---|---|
+   | `VPS_HOST` | Your VPS hostname or IP. |
+   | `VPS_USERNAME` | The SSH user on the VPS. |
+   | `VPS_SSH_KEY` | The full PEM private key (paste including `-----BEGIN OPENSSH PRIVATE KEY-----` and `-----END …-----` lines). |
+
+4. **Provision the VPS** following §3 above. Each strategy has its own prerequisites (NVM, Docker, PM2, nginx).
+
+5. **Trigger a deploy**:
+
+   - For `release.yml` / `release-pm2.yml`: `git tag v0.1.0 && git push origin v0.1.0 && gh release create v0.1.0 --generate-notes --title "v0.1.0"`.
+   - For `branch.yml`: just `git push origin develop`.
+   - For any of them: click **Run workflow** in the Actions tab.
+
+#### Writing your own workflow
+
+If none of the examples fit, write your own from scratch. The minimum you need:
+
+```yaml
+name: Deploy
+on:                          # pick your trigger
+  push:
+    branches: [main]
+permissions:
+  contents: read             # minimum scope
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production  # optional, for required-reviewer gating
+    concurrency: deploy-${{ github.ref }}
+    steps:
+      - uses: mujeeb-enfin/git-actions@v1
+        with:
+          vps_host: ${{ secrets.VPS_HOST }}
+          vps_username: ${{ secrets.VPS_USERNAME }}
+          vps_ssh_key: ${{ secrets.VPS_SSH_KEY }}
+          project_path: ~/projects/<your-project>
+          strategy: <node-pm2 | node-docker | static | custom>
+          # ...strategy-specific inputs from the table below...
+```
+
+Refer to the [All inputs](#all-inputs) table for the full set of options.
 
 ### All inputs
 

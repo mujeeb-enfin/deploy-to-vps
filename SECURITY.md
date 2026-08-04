@@ -14,7 +14,7 @@
 Use one of the following private channels:
 
 1. **GitHub private vulnerability reporting** (preferred): go to the **Security** tab of this repository and click **Report a vulnerability**.
-2. **Email**: security@mrinnovations.dev
+2. **Email**: security@mr-innovations.com
 
 ### What to include
 
