@@ -25,7 +25,7 @@ jobs:
     if: ${{ vars.SCAN_TARGET_URL != '' || secrets.SCAN_TARGET_URL != '' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: ZAP baseline scan
         uses: zaproxy/action-baseline@v0.15.0
@@ -39,14 +39,14 @@ jobs:
 
       - name: Upload ZAP SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4.37.4
         with:
           sarif_file: zap_baseline_report.sarif
           category: zap-baseline
 
       - name: Upload ZAP reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: zap-baseline-report
           path: |
