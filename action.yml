@@ -1,6 +1,6 @@
 name: 'Deploy to VPS'
 description: 'Composite action that deploys a project to a VPS over SSH. Supports node-pm2, node-docker, static, and custom strategies.'
-author: 'mujeeb-enfin <mujeeb@enfin.dev>'
+author: 'Mujeeb Rahman <mujeeb@mrinnovations.dev>'
 
 inputs:
   # ---- Connection ----

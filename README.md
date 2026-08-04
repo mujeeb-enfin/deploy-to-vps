@@ -112,11 +112,42 @@ This repository runs five security scanners on every push and PR. Each one is al
 
 ### Reporting a vulnerability
 
-Please do **not** open a public GitHub issue for security problems. Use GitHub's private vulnerability reporting (Security tab → Report a vulnerability) or email `security@enfin.dev`.
+Please do **not** open a public GitHub issue for security problems. Use GitHub's private vulnerability reporting (Security tab → Report a vulnerability) or email `security@mrinnovations.dev`.
 
 ## License
 
-[MIT](LICENSE) — © mujeeb-enfin.
+[MIT](LICENSE) — © 2026 Mujeeb Rahman / MR INNOVATIONS.
+
+---
+
+## Maintainer
+
+This action is published and maintained by **Mujeeb Rahman** — project manager by trade, software engineer at heart, and founder of **[MR INNOVATIONS](https://mrinnovations.dev)**.
+
+### Other products from MR INNOVATIONS
+
+#### Developer tools
+- [**MR CODER**](https://marketplace.visualstudio.com/items?itemName=mr-coder) — VS Code extension.
+- [**mr-coder.io**](https://mr-coder.io) — companion site.
+- [**codeshare.site**](https://codeshare.site) — share code snippets with a permalink.
+
+#### Hosting
+- [**cybrohosting.com**](https://cybrohosting.com) — managed hosting.
+
+#### Webhooks
+- [**paymenthooks.com**](https://paymenthooks.com) — payment webhook routing.
+- [**evethooks.io**](https://evethooks.io) — event-driven webhook orchestration.
+- [**emailhooks.io**](https://emailhooks.io) — email-event webhooks (delivered, opened, bounced).
+
+#### APIs & data
+- [**worldpostallocations.com**](https://worldpostallocations.com) — worldwide postal-code / address-allocation API.
+
+#### Classifieds & marketplaces
+- [**360classifieds.in**](https://360classifieds.in) — India classifieds platform.
+
+#### Travel & hospitality
+- [**hotelstack.io**](https://hotelstack.io) — hotel-tech stack for boutique properties.
+- [**bookmyroom.io**](https://bookmyroom.io) — direct hotel-room booking engine.
 
 ---
 
