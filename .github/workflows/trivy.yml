@@ -1,0 +1,48 @@
+name: Trivy
+
+# Scans the repository filesystem for known vulnerabilities in OS packages,
+# libraries, and IaC misconfigurations (workflow YAML, action.yml, .yamllint.yml).
+# Uses aquasecurity/trivy-action pinned to a known commit SHA.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly vuln-database refresh.
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trivy-fs:
+    name: Trivy filesystem scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Run Trivy filesystem scanner
+        uses: aquasecurity/trivy-action@2736533278103862a861f4a35ebac3e97854d956 # master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-fs.sarif'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+          # Skip the dependency-check-report output dir from recursive scans.
+          ignore-dirs: 'reports/,node_modules/,dist/,build/,.git/'
+          # Misconfigurations on workflow YAML files.
+          scanners: 'vuln,misconfig,secret,license'
+          # Fail the build on CRITICAL or HIGH findings.
+          exit-code: '1'
+
+      - name: Upload Trivy SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs

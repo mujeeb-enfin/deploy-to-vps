@@ -1,0 +1,39 @@
+name: SonarQube
+
+# Static analysis of all YAML, shell, and Markdown files in the repository
+# via SonarSource's official action. Configured for SonarCloud by default;
+# override SONAR_HOST_URL and SONAR_TOKEN secrets to point at a self-hosted
+# SonarQube server.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sonarqube:
+    name: SonarQube scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # SonarQube needs the full history for blame information.
+          fetch-depth: 0
+
+      - name: SonarQube Scan
+        uses: sonarsource/sonarqube-scan-action@v3
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      - name: SonarQube Quality Gate
+        if: always()
+        uses: sonarsource/sonarqube-quality-gate-action@v2
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}

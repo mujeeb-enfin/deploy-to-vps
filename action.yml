@@ -1,0 +1,333 @@
+name: 'Deploy to VPS'
+description: 'Composite action that deploys a project to a VPS over SSH. Supports node-pm2, node-docker, static, and custom strategies.'
+author: 'mujeeb-enfin <mujeeb@enfin.dev>'
+
+inputs:
+  # ---- Connection ----
+  vps_host:
+    description: 'VPS hostname or IP.'
+    required: true
+  vps_port:
+    description: 'SSH port on the VPS.'
+    required: false
+    default: '22'
+  vps_username:
+    description: 'SSH username on the VPS.'
+    required: true
+  vps_ssh_key:
+    description: 'Private SSH key (PEM) with access to the VPS.'
+    required: true
+  passphrase:
+    description: 'Passphrase for an encrypted SSH private key. Leave empty if the key has no passphrase.'
+    required: false
+    default: ''
+  vps_fingerprint:
+    description: 'SHA256 fingerprint of the VPS host public key (e.g. "SHA256:abc..."). Leave empty to skip host-key verification (not recommended for production).'
+    required: false
+    default: ''
+  project_path:
+    description: 'Path on the VPS where the project lives (absolute or ~-relative).'
+    required: true
+  ref:
+    description: 'Git ref to deploy (tag, branch, or SHA). Required unless set by caller.'
+    required: false
+    default: ''
+  ssh_command_timeout:
+    description: 'SSH command timeout in minutes.'
+    required: false
+    default: '30'
+
+  # ---- Strategy selection ----
+  strategy:
+    description: 'Deploy strategy. One of: node-pm2, node-docker, static, custom.'
+    required: false
+    default: 'node-docker'
+  pre_deploy_commands:
+    description: 'Optional multiline shell snippet run after checkout, before install/build. Use for `cp .env.production .env`, etc.'
+    required: false
+    default: ''
+  skip_install:
+    description: 'Skip the install step (node-pm2 / node-docker only). Set to "true" to skip.'
+    required: false
+    default: 'false'
+  skip_build:
+    description: 'Skip the build step (node-pm2 / node-docker only). Set to "true" to skip.'
+    required: false
+    default: 'false'
+  dry_run:
+    description: 'When "true", print the resolved deploy commands instead of executing them via SSH. Useful for CI matrix testing.'
+    required: false
+    default: 'false'
+
+  # ---- node-pm2 strategy ----
+  node_version:
+    description: 'Node.js version managed by nvm on the VPS. Used by node-pm2 and node-docker.'
+    required: false
+    default: '22'
+  pm2_app_name:
+    description: 'PM2 process name. If the process is not yet registered, pm2 start will be used.'
+    required: false
+    default: 'app'
+  install_command:
+    description: 'Install command for node-pm2 (and the legacy node-docker install step).'
+    required: false
+    default: 'npm ci --no-audit --no-fund'
+  build_command:
+    description: 'Build command for node-pm2 / node-docker. Set to empty string to skip.'
+    required: false
+    default: 'npm run build'
+
+  # ---- node-docker strategy ----
+  compose_file:
+    description: 'Compose file for node-docker. Falls back to docker-compose.yml then compose.yaml.'
+    required: false
+    default: 'compose.yaml'
+
+  # ---- static strategy ----
+  static_source_dir:
+    description: 'Build output directory copied from project_path to static_output_dir.'
+    required: false
+    default: 'dist'
+  static_output_dir:
+    description: 'Destination directory on the VPS (e.g. /var/www/html).'
+    required: false
+    default: '/var/www/html'
+  reload_service:
+    description: 'Optional service to reload after copying (e.g. nginx, caddy). Empty to skip.'
+    required: false
+    default: 'nginx'
+
+  # ---- custom strategy ----
+  custom_script:
+    description: 'Shell snippet to run when strategy == "custom". Runs after checkout and pre_deploy_commands.'
+    required: false
+    default: ''
+
+outputs:
+  deploy_status:
+    description: '"success" if the deploy completed, "failure" otherwise.'
+    value: ${{ steps.summary.outputs.deploy_status }}
+  deployed_ref:
+    description: 'The git ref that was deployed.'
+    value: ${{ inputs.ref }}
+  deployed_at:
+    description: 'ISO-8601 UTC timestamp of deploy start.'
+    value: ${{ steps.now.outputs.iso }}
+  vps_host:
+    description: 'The target VPS host.'
+    value: ${{ inputs.vps_host }}
+  strategy:
+    description: 'The strategy that ran.'
+    value: ${{ inputs.strategy }}
+  deploy_duration_seconds:
+    description: 'Wall-clock duration of the deploy step in seconds.'
+    value: ${{ steps.summary.outputs.duration_seconds }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Stamp start time
+      id: now
+      shell: bash
+      run: |
+        echo "iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+        echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+    - name: Deploy via SSH
+      id: ssh
+      uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
+      env:
+        PROJECT_PATH: ${{ inputs.project_path }}
+        REF: ${{ inputs.ref }}
+        NODE_VERSION: ${{ inputs.node_version }}
+        STRATEGY: ${{ inputs.strategy }}
+        PRE_DEPLOY_COMMANDS: ${{ inputs.pre_deploy_commands }}
+        SKIP_INSTALL: ${{ inputs.skip_install }}
+        SKIP_BUILD: ${{ inputs.skip_build }}
+        PM2_APP_NAME: ${{ inputs.pm2_app_name }}
+        INSTALL_COMMAND: ${{ inputs.install_command }}
+        BUILD_COMMAND: ${{ inputs.build_command }}
+        COMPOSE_FILE: ${{ inputs.compose_file }}
+        STATIC_SOURCE_DIR: ${{ inputs.static_source_dir }}
+        STATIC_OUTPUT_DIR: ${{ inputs.static_output_dir }}
+        RELOAD_SERVICE: ${{ inputs.reload_service }}
+        CUSTOM_SCRIPT: ${{ inputs.custom_script }}
+        DRY_RUN: ${{ inputs.dry_run }}
+      with:
+        host: ${{ inputs.vps_host }}
+        port: ${{ inputs.vps_port }}
+        username: ${{ inputs.vps_username }}
+        key: ${{ inputs.vps_ssh_key }}
+        passphrase: ${{ inputs.passphrase }}
+        fingerprint: ${{ inputs.vps_fingerprint }}
+        script_stop: true
+        command_timeout: ${{ inputs.ssh_command_timeout }}m
+        script: |
+          set -euo pipefail
+
+          if [ "${DRY_RUN:-false}" = "true" ]; then
+            echo "::notice::Dry-run mode — printing resolved commands without executing them."
+            echo "+ cd $PROJECT_PATH"
+            echo "+ git fetch origin --tags"
+            echo "+ git checkout $REF"
+            [ -n "$PRE_DEPLOY_COMMANDS" ] && echo "+ (pre_deploy_commands supplied — see workflow)"
+            case "$STRATEGY" in
+              node-pm2)
+                echo "+ nvm use $NODE_VERSION"
+                [ "$SKIP_INSTALL" != "true" ] && echo "+ $INSTALL_COMMAND (or npm install if no lockfile)"
+                [ "$SKIP_BUILD" != "true" ] && [ -n "$BUILD_COMMAND" ] && echo "+ $BUILD_COMMAND"
+                echo "+ pm2 restart|start $PM2_APP_NAME"
+                echo "+ pm2 save"
+                ;;
+              node-docker)
+                echo "+ nvm use $NODE_VERSION"
+                [ "$SKIP_INSTALL" != "true" ] && echo "+ $INSTALL_COMMAND"
+                [ "$SKIP_BUILD" != "true" ] && [ -n "$BUILD_COMMAND" ] && echo "+ $BUILD_COMMAND"
+                echo "+ docker compose -f $COMPOSE_FILE down"
+                echo "+ docker compose -f $COMPOSE_FILE up -d --build"
+                ;;
+              static)
+                echo "+ sudo rsync -a --delete $STATIC_SOURCE_DIR/ $STATIC_OUTPUT_DIR/"
+                [ -n "$RELOAD_SERVICE" ] && echo "+ sudo systemctl reload $RELOAD_SERVICE"
+                ;;
+              custom)
+                echo "+ (custom_script supplied — see workflow)"
+                ;;
+              *)
+                echo "::error::Unknown strategy: '$STRATEGY'. Expected: node-pm2, node-docker, static, custom."
+                exit 1
+                ;;
+            esac
+            exit 0
+          fi
+
+          echo "::group::Deploy strategy: $STRATEGY"
+
+          export NVM_DIR="$HOME/.nvm"
+          # shellcheck disable=SC1091
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+          cd "$PROJECT_PATH"
+          git fetch origin --tags
+          if [ -n "$REF" ]; then
+            git checkout "$REF"
+          else
+            echo "::error::No ref provided. Pass the 'ref' input or set one in the calling workflow."
+            exit 1
+          fi
+
+          if [ -n "$PRE_DEPLOY_COMMANDS" ]; then
+            echo "::group::Running pre_deploy_commands"
+            eval "$PRE_DEPLOY_COMMANDS"
+            echo "::endgroup::"
+          fi
+
+          case "$STRATEGY" in
+            node-pm2)
+              nvm use "$NODE_VERSION"
+              if [ "$SKIP_INSTALL" != "true" ]; then
+                if [ -f package-lock.json ]; then
+                  bash -c "$INSTALL_COMMAND"
+                else
+                  echo "::warning::No package-lock.json — falling back to 'npm install --no-audit --no-fund'."
+                  npm install --no-audit --no-fund
+                fi
+              else
+                echo "::notice::skip_install=true — skipping install."
+              fi
+              if [ "$SKIP_BUILD" != "true" ] && [ -n "$BUILD_COMMAND" ]; then
+                bash -c "$BUILD_COMMAND"
+              else
+                echo "::notice::skip_build=true or build_command empty — skipping build."
+              fi
+              if pm2 list | grep -q -- "$PM2_APP_NAME"; then
+                pm2 restart "$PM2_APP_NAME"
+              else
+                pm2 start npm --name "$PM2_APP_NAME" -- run start:prod 2>/dev/null \
+                  || pm2 start npm --name "$PM2_APP_NAME" -- start
+              fi
+              pm2 save || true
+              ;;
+
+            node-docker)
+              nvm use "$NODE_VERSION"
+              if [ "$SKIP_INSTALL" != "true" ]; then bash -c "$INSTALL_COMMAND"; fi
+              if [ "$SKIP_BUILD" != "true" ] && [ -n "$BUILD_COMMAND" ]; then bash -c "$BUILD_COMMAND"; fi
+              COMPOSE_FILE_ARG=""
+              for candidate in "$COMPOSE_FILE" docker-compose.yml compose.yaml; do
+                if [ -f "$candidate" ]; then COMPOSE_FILE_ARG="-f $candidate"; break; fi
+              done
+              if [ -z "$COMPOSE_FILE_ARG" ]; then
+                echo "::error::No compose file found (looked for $COMPOSE_FILE, docker-compose.yml, compose.yaml)."
+                exit 1
+              fi
+              # shellcheck disable=SC2086
+              docker compose $COMPOSE_FILE_ARG down
+              # shellcheck disable=SC2086
+              docker compose $COMPOSE_FILE_ARG up -d --build
+              ;;
+
+            static)
+              if [ ! -d "$STATIC_SOURCE_DIR" ]; then
+                echo "::error::static_source_dir '$STATIC_SOURCE_DIR' does not exist after checkout."
+                exit 1
+              fi
+              sudo mkdir -p "$STATIC_OUTPUT_DIR"
+              sudo rsync -a --delete "$STATIC_SOURCE_DIR"/ "$STATIC_OUTPUT_DIR"/
+              if [ -n "$RELOAD_SERVICE" ]; then
+                sudo systemctl reload "$RELOAD_SERVICE" || echo "::warning::reload of $RELOAD_SERVICE failed (continuing)."
+              else
+                echo "::notice::reload_service empty — skipping reload."
+              fi
+              ;;
+
+            custom)
+              if [ -z "$CUSTOM_SCRIPT" ]; then
+                echo "::error::strategy=custom requires the 'custom_script' input."
+                exit 1
+              fi
+              bash -c "$CUSTOM_SCRIPT"
+              ;;
+
+            *)
+              echo "::error::Unknown strategy: '$STRATEGY'. Expected: node-pm2, node-docker, static, custom."
+              exit 1
+              ;;
+          esac
+
+          echo "::endgroup::"
+          echo "::notice::Deploy finished using strategy '$STRATEGY'."
+
+    - name: Build deploy summary
+      id: summary
+      if: always()
+      shell: bash
+      run: |
+        if [ "${{ steps.ssh.conclusion }}" = "success" ]; then
+          STATUS="success"
+        else
+          STATUS="failure"
+        fi
+        echo "deploy_status=$STATUS" >> "$GITHUB_OUTPUT"
+        END=$(date +%s)
+        START="${{ steps.now.outputs.start_epoch }}"
+        DURATION=$((END - START))
+        echo "duration_seconds=$DURATION" >> "$GITHUB_OUTPUT"
+
+        {
+          echo "## Deploy Result"
+          echo ""
+          echo "| Field | Value |"
+          echo "|---|---|"
+          echo "| **Status** | $STATUS |"
+          echo "| **Strategy** | ${{ inputs.strategy }} |"
+          echo "| **VPS host** | ${{ inputs.vps_host }} |"
+          echo "| **Ref** | ${{ inputs.ref }} |"
+          echo "| **Started (UTC)** | ${{ steps.now.outputs.iso }} |"
+          echo "| **Duration** | ${DURATION}s |"
+          echo "| **Dry run** | ${{ inputs.dry_run }} |"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+branding:
+  icon: 'server'
+  color: 'blue'

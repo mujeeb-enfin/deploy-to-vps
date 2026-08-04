@@ -1,0 +1,46 @@
+name: Deploy to VPS (PM2)
+
+# Example consumer workflow for the `node-pm2` strategy.
+# Triggered on published GitHub releases and via manual dispatch.
+# See README.md §5.3 for the full set of strategy examples.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref (tag, branch, or SHA) to deploy.'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-pm2-${{ github.event.release.tag_name || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and Deploy (PM2)
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Deploy to VPS with PM2
+        uses: mujeeb-enfin/git-actions@v1
+        with:
+          vps_host: ${{ secrets.VPS_HOST }}
+          vps_username: ${{ secrets.VPS_USERNAME }}
+          vps_ssh_key: ${{ secrets.VPS_SSH_KEY }}
+          project_path: ~/projects/api
+          strategy: node-pm2
+          pm2_app_name: api
+          node_version: '22'
+          # Optional: copy env files before install/build.
+          pre_deploy_commands: |
+            [ -f .env.production ] && cp .env.production .env
+          ref: ${{ github.event.release.tag_name || inputs.ref || github.ref_name }}

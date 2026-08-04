@@ -1,0 +1,57 @@
+name: OWASP ZAP
+
+# Passive baseline scan of any live URL associated with this repo (e.g. a
+# GitHub Pages site). If you don't publish a site from this repo, set
+# zaptarget to an empty string (default) and ZAP will be skipped.
+# Set secrets.SCAN_TARGET_URL to your live URL.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly external scan.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  zap-baseline:
+    name: ZAP baseline scan
+    runs-on: ubuntu-latest
+    # Skip the job entirely when there's no target configured.
+    if: ${{ vars.SCAN_TARGET_URL != '' || secrets.SCAN_TARGET_URL != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.15.0
+        with:
+          target: ${{ vars.SCAN_TARGET_URL || secrets.SCAN_TARGET_URL }}
+          rules_file_name: ''
+          cmd_options: '-I -m 5 -T 30'
+          fail_action: true
+          artifact_name: zap-baseline-report
+          output_format: 'sarif,json,md,html'
+
+      - name: Upload ZAP SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: zap_baseline_report.sarif
+          category: zap-baseline
+
+      - name: Upload ZAP reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-baseline-report
+          path: |
+            zap_baseline_report.html
+            zap_baseline_report.json
+            zap_baseline_report.md
+            zap_baseline_report.sarif
+          retention-days: 30

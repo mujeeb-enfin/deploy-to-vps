@@ -1,0 +1,37 @@
+name: Deploy to VPS (develop branch)
+
+# Triggers on every push to the develop branch.
+# Uses the same multi-strategy action as release.yml; defaults to node-docker.
+# See README.md for strategy options (node-pm2, node-docker, static, custom).
+
+on:
+  push:
+    branches:
+      - develop
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-develop-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+    environment: development
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Deploy to VPS
+        uses: mujeeb-enfin/git-actions@v1
+        with:
+          vps_host: ${{ secrets.VPS_HOST }}
+          vps_username: ${{ secrets.VPS_USERNAME }}
+          vps_ssh_key: ${{ secrets.VPS_SSH_KEY }}
+          project_path: ~/ai-sales-agent/sales-engineer-ai-agent
+          strategy: node-docker
+          node_version: '22'
+          ref: ${{ github.ref_name }}
