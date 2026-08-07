@@ -2,7 +2,7 @@
 
 A consolidated checklist for developers setting up the **`Deploy to VPS`** action and its CI / security-scanning pipeline. Read this top-to-bottom on a fresh repo, or jump to the section you need.
 
-> If you are a **downstream consumer** (you want to call `mujeeb-enfin/git-actions@v1` from your own repo), you only need sections 1, 2, and 4.
+> If you are a **downstream consumer** (you want to call `mujeeb-enfin/deploy-to-vps@v1` from your own repo), you only need sections 1, 2, and 4.
 >
 > If you are a **maintainer** of this repo, you additionally need sections 3, 5, and 6.
 
@@ -57,9 +57,21 @@ npx actionlint
 npx yamllint .
 docker run --rm -v "$PWD:/src" -w /src koalaman/shellcheck:stable \
   <(awk '/^          script: \|/{f=1;next} f && /^          [a-zA-Z]/{f=0} f{sub(/^          /,"");print}' action.yml)
+
+# Security checks — no install step; Node standard library only.
+node scripts/ci/repo-rules.mjs --out=reports/repo-rules.json --exit-code
+node scripts/ci/waf/waf-lint.mjs --out=reports/waf-lint.json
+node scripts/ci/security-report.mjs --repo-rules=reports/repo-rules.json
+node --test scripts/ci/__tests__/security.test.mjs
 ```
 
 The `awk` one-liner extracts the embedded `script:` block from `action.yml` so shellcheck can lint it.
+
+The `scripts/ci/**` tools have **no dependencies** — they are plain Node ES
+modules using only the standard library, so there is no `package.json` and
+nothing to install. Outside a pull request the reporter prints findings without
+attribution and does not set an exit code, because there is no diff to scope
+against.
 
 ## 4. VPS Prerequisites
 
@@ -92,21 +104,44 @@ Do **not** give the deploy user blanket `NOPASSWD: ALL`.
 
 | Workflow | Trigger | Cadence | Fail threshold | Notes |
 |---|---|---|---|---|
+| `pr-security.yml` | PR | every PR | see below | **The security gate.** Scanners never fail; one reporter blames, comments and decides. Require `security-report` in branch protection. |
 | `test.yml` | push, PR | every push | exit non-zero | actionlint + yamllint + shellcheck. |
-| `gitleaks.yml` | push, PR, schedule | every push + nightly 03:00 UTC | any secret found | Deep history scan on push to `main` and on the nightly schedule. |
-| `owasp.yml` | push, PR, schedule | every push + weekly Mon 04:00 UTC | CVSS ≥ 7.0 | Uploads SARIF to the Code Scanning tab. |
-| `trivy.yml` | push, PR, schedule | every push + weekly Mon 05:00 UTC | CRITICAL or HIGH severity | Scans filesystem: vulns, IaC misconfigs, secret leaks. |
+| `gitleaks.yml` | push, schedule | push to `main` + nightly 03:00 UTC | any secret found | Deep history scan. PR coverage comes from `pr-security.yml`. |
+| `owasp.yml` | push, PR, schedule | every push + weekly Mon 04:00 UTC | CVSS ≥ 7.0 | Uploads SARIF to Code Scanning. **Advisory only — see the note below.** |
+| `trivy.yml` | push, schedule | push to `main` + weekly Mon 05:00 UTC | CRITICAL or HIGH | Filesystem vulns, IaC misconfigs, secret leaks. PR coverage comes from `pr-security.yml`. |
 | `sonarqube.yml` | push, PR | every push | SonarQube quality gate | Skipped if `SONAR_TOKEN` is not set. |
-| `zap.yml` | push, PR, schedule | every push + weekly Mon 06:00 UTC | ZAP `WARN` or worse by default | Skipped if `SCAN_TARGET_URL` is not set. |
+| `zap.yml` | push, PR, schedule | every push + weekly Mon 06:00 UTC | ZAP `WARN` or worse | Skipped if `SCAN_TARGET_URL` is not set. |
 
-To disable a scanner you don't need, delete its workflow file. To change severity thresholds, edit the `severity:`, `failOnCVSS`, or `cmd_options:` lines inside the workflow.
+**Why `gitleaks.yml` and `trivy.yml` no longer run on pull requests:** they used
+to fail PRs independently, contradicting the unified gate and producing two
+different answers to "is this PR safe?". Pull-request coverage is unchanged — it
+is delivered through `pr-security.yml`'s single attributed check instead.
+
+**What blocks a merge** (`scripts/ci/security/verdict.mjs` is the single source
+of truth):
+
+| Finding | Blocks |
+|---|---|
+| Unpinned third-party `uses:` | **Always** — a mutable tag is exploitable until the pin lands |
+| Secret introduced by this PR | Yes |
+| CRITICAL/HIGH Trivy finding introduced by this PR | Yes |
+| Shell template injection, missing `permissions:`, missing `set -euo pipefail` introduced by this PR | Yes |
+| Anything pre-existing, or from OWASP / ZAP / SonarQube / waf-lint | No — advisory |
+
+> **OWASP Dependency-Check finds nothing in this repository.** A composite action
+> has no `package.json`, no lockfile and no dependency manifest, so there is
+> nothing for it to analyse. It is retained for coverage reporting and is
+> **advisory**; it must not be read as evidence that dependencies were verified.
+> Third-party supply-chain risk here is controlled by SHA-pinning every `uses:`.
+
+To disable a scanner you don't need, delete its workflow file. To change severity thresholds, edit the `severity:`, `failOnCVSS`, or `cmd_options:` lines inside the workflow. Full runbook: [`docs/SECURITY_CI.md`](docs/SECURITY_CI.md).
 
 ## 6. Public-Use / Versioning Model
 
 This action is intended for **public use**. Consumers reference it as:
 
 ```yaml
-- uses: mujeeb-enfin/git-actions@v1
+- uses: mujeeb-enfin/deploy-to-vps@v1
 ```
 
 - `@v1` is a floating major tag. You receive non-breaking updates automatically.

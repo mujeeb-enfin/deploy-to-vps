@@ -32,6 +32,23 @@ Use one of the following private channels:
 | Fix or mitigation    | 30 days for high-severity, 90 days for low/medium |
 | Public disclosure    | Coordinated with the reporter once a fix ships |
 
+## Automated controls
+
+Since `v1.1.0` these are enforced in CI rather than left to code review. See
+[`docs/SECURITY_CI.md`](docs/SECURITY_CI.md) for the full runbook.
+
+| Control | Enforced by | Blocks a merge |
+|---|---|---|
+| Every third-party `uses:` pinned to a 40-character commit SHA | `scripts/ci/repo-rules.mjs` | **Always** |
+| No `${{ inputs.* }}` / `${{ github.event.* }}` interpolated into a `run:` or `script:` block | `scripts/ci/repo-rules.mjs` | If introduced by the PR |
+| Every workflow declares a least-privilege `permissions:` block | `scripts/ci/repo-rules.mjs` | If introduced by the PR |
+| No secrets in the source or git history | gitleaks (full-history scan) | If introduced by the PR |
+| No CRITICAL/HIGH filesystem or IaC findings | Trivy | If introduced by the PR |
+
+Findings are attributed to the developer whose commit last touched the line and
+reported through a single pull-request comment. Secret **values** are never
+printed there — this is a public repository, so the comment is world-readable.
+
 ## Scope
 
 In-scope:

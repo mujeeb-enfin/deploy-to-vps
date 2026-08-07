@@ -2,18 +2,18 @@
 
 A reusable GitHub Action that deploys a project to a VPS over SSH — Node.js + Docker, Node.js + PM2, static sites, or any custom shell workflow.
 
-**Intended for public use.** Drop the action into any repo via `mujeeb-enfin/git-actions@v1`; configure three secrets (`VPS_HOST`, `VPS_USERNAME`, `VPS_SSH_KEY`); publish a release.
+**Intended for public use.** Drop the action into any repo via `mujeeb-enfin/deploy-to-vps@v1`; configure three secrets (`VPS_HOST`, `VPS_USERNAME`, `VPS_SSH_KEY`); publish a release.
 
 > Looking for the consolidated developer checklist (required secrets, VPS prerequisites, scanner configuration, local tooling, versioning)? See [**`requirements.md`**](./requirements.md).
 
 ## Status
 
-[![CI](https://github.com/mujeeb-enfin/git-actions/actions/workflows/test.yml/badge.svg)](../../actions/workflows/test.yml)
-[![gitleaks](https://github.com/mujeeb-enfin/git-actions/actions/workflows/gitleaks.yml/badge.svg)](../../actions/workflows/gitleaks.yml)
-[![OWASP](https://github.com/mujeeb-enfin/git-actions/actions/workflows/owasp.yml/badge.svg)](../../actions/workflows/owasp.yml)
-[![Trivy](https://github.com/mujeeb-enfin/git-actions/actions/workflows/trivy.yml/badge.svg)](../../actions/workflows/trivy.yml)
-[![SonarQube](https://github.com/mujeeb-enfin/git-actions/actions/workflows/sonarqube.yml/badge.svg)](../../actions/workflows/sonarqube.yml)
-[![ZAP](https://github.com/mujeeb-enfin/git-actions/actions/workflows/zap.yml/badge.svg)](../../actions/workflows/zap.yml)
+[![CI](https://github.com/mujeeb-enfin/deploy-to-vps/actions/workflows/test.yml/badge.svg)](../../actions/workflows/test.yml)
+[![gitleaks](https://github.com/mujeeb-enfin/deploy-to-vps/actions/workflows/gitleaks.yml/badge.svg)](../../actions/workflows/gitleaks.yml)
+[![OWASP](https://github.com/mujeeb-enfin/deploy-to-vps/actions/workflows/owasp.yml/badge.svg)](../../actions/workflows/owasp.yml)
+[![Trivy](https://github.com/mujeeb-enfin/deploy-to-vps/actions/workflows/trivy.yml/badge.svg)](../../actions/workflows/trivy.yml)
+[![SonarQube](https://github.com/mujeeb-enfin/deploy-to-vps/actions/workflows/sonarqube.yml/badge.svg)](../../actions/workflows/sonarqube.yml)
+[![ZAP](https://github.com/mujeeb-enfin/deploy-to-vps/actions/workflows/zap.yml/badge.svg)](../../actions/workflows/zap.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ## What's in This Repo
@@ -59,7 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: mujeeb-enfin/git-actions@v1
+      - uses: mujeeb-enfin/deploy-to-vps@v1
         with:
           vps_host: ${{ secrets.VPS_HOST }}
           vps_username: ${{ secrets.VPS_USERNAME }}
@@ -94,7 +94,26 @@ The action supports **four deploy strategies** selectable via the `strategy` inp
 
 ## Security & Scans
 
-This repository runs five security scanners on every push and PR. Each one is also scheduled to run on a weekly cadence so the CVE database stays fresh.
+Every pull request passes through a **single security gate** that funnels each scanner into one attributed report. Deep scans also run on push and on a weekly cadence so the CVE database stays fresh.
+
+**See [`docs/SECURITY_CI.md`](docs/SECURITY_CI.md)** for what blocks a merge, how to suppress a false positive properly, and the honest limitations of each scanner.
+
+### The pull-request gate
+
+[`pr-security.yml`](.github/workflows/pr-security.yml) runs the scanners, then one reporter attributes every finding to the developer whose commit last touched the line — via `git blame` plus the GitHub commits API — posts a **single** comment that `@`-mentions them, and sets the verdict. Branch protection needs one security check (`security-report`) instead of one per scanner. Secret *values* are never printed: this is a public repository, so the comment is world-readable.
+
+It also enforces the rules `CONTRIBUTING.md` states, via [`scripts/ci/repo-rules.mjs`](scripts/ci/repo-rules.mjs):
+
+| Rule | Blocks a merge |
+|---|---|
+| Every third-party `uses:` pinned to a 40-character SHA | **Always** — a mutable tag is repointable by whoever owns it upstream |
+| No `${{ inputs.* }}` interpolated straight into a `run:` block | If this PR introduced it |
+| Every workflow declares a `permissions:` block | If this PR introduced it |
+| `set -euo pipefail` present; every action input documented | If this PR introduced it |
+
+The tooling adds **no dependencies** — plain Node ES modules using only the standard library, with no `package.json` and no install step. Tooling for a security action should not enlarge the supply chain the action exists to keep small.
+
+### The scanners
 
 | Scanner | What it catches | Workflow |
 |---|---|---|
@@ -109,6 +128,8 @@ This repository runs five security scanners on every push and PR. Each one is al
 - **SonarQube** — set `SONAR_TOKEN` and `SONAR_HOST_URL` secrets to point at a SonarCloud project or your self-hosted server. The job will skip cleanly if these are absent.
 - **ZAP** — set `vars.SCAN_TARGET_URL` (or `secrets.SCAN_TARGET_URL`) to the URL of any live site associated with the repo. The job is skipped when no target is configured.
 - **OWASP / Trivy** — these run with sensible defaults. Tune severity thresholds or scanner lists in the workflow files.
+
+> **What OWASP Dependency-Check actually covers here:** nothing. A composite action has no `package.json`, no lockfile, and no dependency manifest of any kind, so there is nothing for it to analyse. It is kept for coverage reporting and is treated as **advisory** by the gate — it must not be read as evidence that dependencies were verified. Third-party supply-chain risk in this repository is controlled by SHA-pinning every `uses:`, which the gate enforces. See [`docs/SECURITY_CI.md` §5](docs/SECURITY_CI.md).
 
 ### Reporting a vulnerability
 
@@ -448,7 +469,7 @@ Existing consumers who do not change their workflow keep getting the Node + Dock
 #### `node-pm2` — plain Node.js app with PM2
 
 ```yaml
-- uses: mujeeb-enfin/git-actions@v1
+- uses: mujeeb-enfin/deploy-to-vps@v1
   with:
     vps_host: ${{ secrets.VPS_HOST }}
     vps_username: ${{ secrets.VPS_USERNAME }}
@@ -463,7 +484,7 @@ Existing consumers who do not change their workflow keep getting the Node + Dock
 #### `node-docker` — Node.js in Docker Compose (default)
 
 ```yaml
-- uses: mujeeb-enfin/git-actions@v1
+- uses: mujeeb-enfin/deploy-to-vps@v1
   with:
     vps_host: ${{ secrets.VPS_HOST }}
     vps_username: ${{ secrets.VPS_USERNAME }}
@@ -478,7 +499,7 @@ Existing consumers who do not change their workflow keep getting the Node + Dock
 #### `static` — pre-built static site served by nginx / caddy
 
 ```yaml
-- uses: mujeeb-enfin/git-actions@v1
+- uses: mujeeb-enfin/deploy-to-vps@v1
   with:
     vps_host: ${{ secrets.VPS_HOST }}
     vps_username: ${{ secrets.VPS_USERNAME }}
@@ -494,7 +515,7 @@ Existing consumers who do not change their workflow keep getting the Node + Dock
 #### `custom` — escape hatch (Django / Go / Rails / PHP / …)
 
 ```yaml
-- uses: mujeeb-enfin/git-actions@v1
+- uses: mujeeb-enfin/deploy-to-vps@v1
   with:
     vps_host: ${{ secrets.VPS_HOST }}
     vps_username: ${{ secrets.VPS_USERNAME }}
@@ -536,14 +557,14 @@ This repo ships three ready-to-copy workflow files under `.github/workflows/`. P
    ```bash
    mkdir -p .github/workflows
    curl -o .github/workflows/deploy.yml \
-     https://raw.githubusercontent.com/mujeeb-enfin/git-actions/v1/.github/workflows/release.yml
+     https://raw.githubusercontent.com/mujeeb-enfin/deploy-to-vps/v1/.github/workflows/release.yml
    ```
 
 2. **Edit the placeholder values** in the file you just copied. The lines you'll almost certainly need to change:
 
    | Field | What to put |
    |---|---|
-   | `uses: mujeeb-enfin/git-actions@v1` | Already correct — leave it. |
+   | `uses: mujeeb-enfin/deploy-to-vps@v1` | Already correct — leave it. |
    | `project_path:` | The absolute or `~`-relative path on the VPS where your code lives. E.g. `~/projects/myapp`. |
    | `strategy:` | `node-pm2`, `node-docker`, `static`, or `custom`. |
    | `pm2_app_name:` (PM2 only) | The name you registered with `pm2 start`. E.g. `myapp`. |
@@ -584,7 +605,7 @@ jobs:
     environment: production  # optional, for required-reviewer gating
     concurrency: deploy-${{ github.ref }}
     steps:
-      - uses: mujeeb-enfin/git-actions@v1
+      - uses: mujeeb-enfin/deploy-to-vps@v1
         with:
           vps_host: ${{ secrets.VPS_HOST }}
           vps_username: ${{ secrets.VPS_USERNAME }}
@@ -633,7 +654,7 @@ If you copy the workflow elsewhere and re-introduce raw `${{ github.event.releas
 ### 7.2 Recommended pattern (already applied in this repo)
 
 ```yaml
-- uses: mujeeb-enfin/git-actions@v1
+- uses: mujeeb-enfin/deploy-to-vps@v1
   env:
     TAG: ${{ github.event.release.tag_name || github.ref_name }}
   with:
@@ -658,7 +679,13 @@ The composite action then quotes the value internally: `git checkout "$REF"`.
 
 ### 7.4 Other recommendations
 
-- **Pin action versions to a commit SHA** for supply-chain safety. This repo's `action.yml` pins `appleboy/ssh-action` to `029f5b4aeeeb58fdfe1410a5d17f967dacf36262`. Avoid the `@vN` tag-ref pattern in your own workflows — use the full 40-character commit SHA instead. Tag refs can be moved by the maintainer.
+- **Pin action versions to a commit SHA** for supply-chain safety. This repo's `action.yml` pins `appleboy/ssh-action` to `029f5b4aeeeb58fdfe1410a5d17f967dacf36262`, and since v1.1.0 **every** third-party `uses:` across the repository is SHA-pinned and the rule is enforced in CI (`repo-rules/unpinned-action-reference`) — it blocks a merge regardless of who introduced it, because a mutable tag is exploitable until the pin lands. Avoid the `@vN` tag-ref pattern in your own workflows; use the full 40-character commit SHA. Resolve one with:
+
+  ```bash
+  git ls-remote https://github.com/OWNER/REPO refs/tags/TAG
+  ```
+
+  The one deliberate exception is `uses: mujeeb-enfin/deploy-to-vps@v1` — consumers *should* track the floating major tag, which is the whole point of publishing `v1`.
 - **Least privilege.** Use a dedicated, non-root user on the VPS for deployments.
 - **Restrict who can publish releases.** Anyone with repo write access can publish a Release and therefore trigger a deploy. Use branch protection + a small trusted maintainer group.
 - **Rotate secrets periodically.** Rotate `VPS_SSH_KEY` and the VPS→GitHub deploy key every 6–12 months. Zero-downtime rotation:
