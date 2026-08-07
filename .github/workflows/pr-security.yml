@@ -1,0 +1,141 @@
+name: PR Security Gate
+
+# Unified security gate for pull requests.
+#
+# DESIGN: the scanners in this job NEVER fail. Each drops a report, and the
+# final step collects them, blames every finding on the developer whose commit
+# last touched the line, posts ONE consolidated pull-request comment, and sets
+# the verdict. That gives branch protection a single required status check
+# instead of one per scanner, and keeps the tiered blocking rule in one testable
+# function (scripts/ci/security/verdict.mjs) rather than smeared across
+# `exit-code:` flags in five different workflow files.
+#
+# WHY THE OTHER SCANNER WORKFLOWS NO LONGER RUN ON PULL REQUESTS: gitleaks.yml
+# and trivy.yml previously failed pull requests on their own, which contradicted
+# this gate and produced two different answers to "is this PR safe?". They now
+# run on push-to-main and on their schedules, where their job is to feed GitHub
+# code scanning and keep the README badges meaningful. Pull-request coverage is
+# unchanged — it is delivered through this one check instead of several.
+#
+# ZERO ADDED SUPPLY CHAIN: the reporter is plain Node ES modules using only
+# Node's standard library. No package.json, no npm install, no lockfile. In a
+# security-focused public action, the tooling must not enlarge the very supply
+# chain the action exists to keep small.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr-security-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    name: Security scans
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # gitleaks scans git HISTORY — a secret committed then deleted is
+          # still leaked. A shallow clone would scan one commit and pass
+          # vacuously. The reporter also needs full history for `git blame`.
+          fetch-depth: 0
+
+      - name: Create report directory
+        run: mkdir -p reports
+
+      # The gitleaks BINARY, not gitleaks/gitleaks-action: the binary is MIT and
+      # needs no licence for any account type, and --redact keeps the secret
+      # VALUE out of the CI log, which is world-readable on a public repository.
+      - name: gitleaks (secret scan)
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/repo" \
+            ghcr.io/gitleaks/gitleaks:latest \
+            detect \
+              --source /repo \
+              --report-format sarif \
+              --report-path /repo/reports/gitleaks.sarif \
+              --redact \
+              --exit-code 0
+
+      - name: Trivy (config + filesystem)
+        uses: aquasecurity/trivy-action@2736533278103862a861f4a35ebac3e97854d956 # master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'reports/trivy-fs.sarif'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          ignore-dirs: 'reports/,node_modules/,.git/'
+          scanners: 'vuln,misconfig,secret,license'
+          # Gating belongs to the report step, never to the scanner.
+          exit-code: '0'
+
+      - name: Repository rules (pinning, shell injection, permissions)
+        run: node scripts/ci/repo-rules.mjs --out=reports/repo-rules.json
+
+      - name: AWS WAF lint (shipped examples)
+        run: node scripts/ci/waf/waf-lint.mjs --out=reports/waf-lint.json
+
+      - name: Unit tests for the security tooling
+        # Node's built-in runner — no dependencies to install.
+        run: node --test scripts/ci/__tests__/security.test.mjs
+
+      - name: Upload scanner reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pr-security-reports
+          path: reports/
+          retention-days: 7
+
+  security-report:
+    name: security-report
+    # This is the job to require in branch protection on `main`.
+    needs: [scan]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # `git blame` needs full history to attribute a line to a commit.
+          fetch-depth: 0
+
+      - name: Download scanner reports
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: pr-security-reports
+          path: reports
+        continue-on-error: true
+
+      - name: Fail if the scan job did not complete
+        # CRITICAL: without this a CRASHED SCANNER JOB PASSES THE GATE. If the
+        # scan job dies, it uploads no reports, the download above is
+        # continue-on-error, and the reporter would see zero findings and
+        # declare a clean pass. "The scanner did not run" must never be
+        # rendered as "the scanner found nothing".
+        if: needs.scan.result != 'success'
+        run: |
+          echo "The scan job did not succeed — the security verdict is UNKNOWN, not clean." >&2
+          echo "  scan: ${{ needs.scan.result }}" >&2
+          exit 1
+
+      - name: Blame, comment and set the verdict
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node scripts/ci/security-report.mjs \
+            --gitleaks-sarif=reports/gitleaks.sarif \
+            --trivy-sarif=reports/trivy-fs.sarif \
+            --repo-rules=reports/repo-rules.json \
+            --waf-lint=reports/waf-lint.json
