@@ -24,6 +24,11 @@ concurrency:
 jobs:
   deploy:
     name: Build and Deploy (PM2)
+    # This repository is the ACTION ITSELF, not a deployable app. Without this
+    # guard, publishing a release here would fire a real SSH deploy of a path
+    # that does not exist and mark the release with a failed check.
+    # DELETE THIS LINE when you copy the workflow into your own repository.
+    if: github.repository != 'mujeeb-enfin/deploy-to-vps'
     runs-on: ubuntu-latest
     environment: production
     steps:

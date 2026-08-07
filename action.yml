@@ -329,7 +329,13 @@ runs:
           STATUS="failure"
         fi
         echo "deploy_status=$STATUS" >> "$GITHUB_OUTPUT"
+
+        # This step is `if: always()`, so it also runs when an earlier step
+        # failed and `start_epoch` came through empty. Subtracting an empty
+        # string yields a nonsense duration (the full Unix epoch), so fall back
+        # to a zero-length window instead of reporting ~1.7 billion seconds.
         END=$(date +%s)
+        START_EPOCH="${START_EPOCH:-$END}"
         DURATION=$((END - START_EPOCH))
         echo "duration_seconds=$DURATION" >> "$GITHUB_OUTPUT"
 

@@ -1,5 +1,8 @@
 name: Deploy to VPS (develop branch)
 
+# EXAMPLE consumer workflow — copy this into YOUR repository and edit the
+# `with:` values. It is inert here: this repository has no `develop` branch.
+#
 # Triggers on every push to the develop branch.
 # Uses the same multi-strategy action as release.yml; defaults to node-docker.
 # See README.md for strategy options (node-pm2, node-docker, static, custom).
@@ -19,6 +22,11 @@ concurrency:
 jobs:
   deploy:
     name: Build and Deploy
+    # This repository is the ACTION ITSELF, not a deployable app. Without this
+    # guard, publishing a release here would fire a real SSH deploy of a path
+    # that does not exist and mark the release with a failed check.
+    # DELETE THIS LINE when you copy the workflow into your own repository.
+    if: github.repository != 'mujeeb-enfin/deploy-to-vps'
     runs-on: ubuntu-latest
     environment: development
     steps:
@@ -31,7 +39,8 @@ jobs:
           vps_host: ${{ secrets.VPS_HOST }}
           vps_username: ${{ secrets.VPS_USERNAME }}
           vps_ssh_key: ${{ secrets.VPS_SSH_KEY }}
-          project_path: ~/ai-sales-agent/sales-engineer-ai-agent
+          # Absolute or ~-relative path to the git checkout on YOUR VPS.
+          project_path: ~/projects/myapp
           strategy: node-docker
           node_version: '22'
           ref: ${{ github.ref_name }}
