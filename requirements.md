@@ -151,16 +151,30 @@ This action is intended for **public use**. Consumers reference it as:
 ### Cutting a release (maintainers)
 
 ```bash
-# 1. Bump the version in CHANGELOG.md (skip this if you've removed that file)
-# 2. Tag the commit
-git tag -s v1.0.0 -m "v1.0.0"
-# 3. Push the tag
-git push origin v1.0.0
-# 4. Create the GitHub Release from the tag
-gh release create v1.0.0 --generate-notes --title "v1.0.0"
+# 1. Move the CHANGELOG entry from [Unreleased] into a new [x.y.z] section.
+# 2. Tag the commit.
+git tag -a v1.1.0 -m "v1.1.0"
+
+# 3. STEP THAT IS EASY TO FORGET — move the floating major tag.
+#    Pushing v1.1.0 does NOT move @v1. Consumers reference @v1, so skipping
+#    this ships the release to nobody. In v1.0.0 the v1 tag was never pushed
+#    at all, which made `uses: ...@v1` unresolvable for every consumer.
+git tag -f -a v1 -m "Floating major tag for v1.x — currently v1.1.0"
+
+# 4. Push both. The floating tag needs --force because it moves.
+git push origin v1.1.0
+git push --force origin v1
+
+# 5. Verify BOTH resolve to the same commit before announcing.
+git ls-remote --tags origin | grep -E 'v1\^|v1\.1\.0\^'
+
+# 6. Create the GitHub Release from the tag.
+gh release create v1.1.0 --title "v1.1.0 — <summary>" --notes-file <(sed -n '/## \[1.1.0\]/,/## \[1.0.0\]/p' CHANGELOG.md)
 ```
 
-Pushing a `v*` tag does **not** automatically move the floating `@v1` ref — that step is currently manual. If you want automation, add a `release.yml` workflow (not currently shipped; out of scope for the minimum viable setup).
+Moving `@v1` is deliberately manual so a bad release cannot auto-promote itself
+to every consumer. Verify CI is green on the tagged commit **before** step 3 —
+once `v1` moves, everyone using `@v1` picks it up on their next run.
 
 ## 7. Troubleshooting quick links
 

@@ -72,7 +72,9 @@ jobs:
 
 Set three secrets (`VPS_HOST`, `VPS_USERNAME`, `VPS_SSH_KEY`) and publish a release. That's it.
 
-> ⚠️ **Note on `@v1`:** This ref resolves only after the maintainer tags a `v1.x.x` release in this repo. Until then, pin to a specific commit SHA (see [requirements.md](requirements.md) §6).
+> **Note on `@v1`:** `v1` is a floating major tag that always points at the latest `v1.x` release — you get fixes automatically without changing your workflow. If you prefer to pin exactly, use a specific tag (`@v1.1.0`) or a commit SHA; see [requirements.md](requirements.md) §6.
+>
+> `actions/checkout` is **not** required: this action operates entirely over SSH on your VPS and never reads the runner's working directory.
 
 ---
 
