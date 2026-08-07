@@ -7,7 +7,9 @@ name: gitleaks
 on:
   push:
     branches: [main]
-  pull_request:
+  # Pull requests are covered by pr-security.yml, which reports every scanner
+  # through one attributed comment and one required status check. Running here
+  # too produced a second, contradictory verdict on the same pull request.
   schedule:
     # Nightly deep scan of the full git history.
     - cron: '0 3 * * *'
@@ -26,7 +28,7 @@ jobs:
           fetch-depth: 0
 
       - name: gitleaks
-        uses: gitleaks/gitleaks-action@v3
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Use the deep-history scanner on nightly runs and on push to main;
