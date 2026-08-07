@@ -25,6 +25,23 @@ fixed, two of which affected consumers directly.
     release is `1.1.0`.
   - `sonarqube.yml` used `sonarsource/sonarqube-quality-gate-action@v2`; that
     action has never published a v2 — the latest tag is `v1.2.1`.
+- **The floating `v1` tag was never published.** `v1.0.0` was tagged, but the
+  `v1` tag that every example and the README tell consumers to use did not exist
+  on the remote, so `uses: …@v1` could not resolve even with the correct
+  repository name. It now exists and tracks the latest `v1.x`.
+- **`branch.yml` advertised an internal path** from an unrelated project
+  (`~/ai-sales-agent/sales-engineer-ai-agent`) in a workflow consumers are meant
+  to copy. Replaced with the generic `~/projects/myapp`.
+- **The example deploy workflows self-triggered.** `release.yml` and
+  `release-pm2.yml` fire on `release: published`; because this repository is the
+  action itself rather than a deployable app, publishing a release would have
+  attempted real SSH deploys against paths that do not exist and marked the
+  release with failed checks. All three examples now carry a repository guard,
+  commented so consumers know to remove it.
+- **The deploy summary could report a nonsense duration.** The step runs
+  `if: always()`, so `start_epoch` can arrive empty when an earlier step failed;
+  subtracting an empty string reported the whole Unix epoch (~1.7 billion
+  seconds) as the deploy time. It now falls back to a zero-length window.
 
 ### Security
 - **Fixed a shell template-injection vector in `action.yml`.** The *Build deploy
