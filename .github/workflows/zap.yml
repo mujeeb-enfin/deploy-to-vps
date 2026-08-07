@@ -21,13 +21,38 @@ jobs:
   zap-baseline:
     name: ZAP baseline scan
     runs-on: ubuntu-latest
-    # Skip the job entirely when there's no target configured.
-    if: ${{ vars.SCAN_TARGET_URL != '' || secrets.SCAN_TARGET_URL != '' }}
     steps:
+      # The `secrets` context is NOT available in any `if:` condition — job or
+      # step. A job-level `if:` that references it fails workflow validation
+      # with "Unrecognized named-value: 'secrets'", which aborts the run before
+      # any step executes and emits no logs. That is why every run of this
+      # workflow failed prior to v1.1.0.
+      #
+      # Secrets ARE available in `env:`, so the target is resolved in a step and
+      # the remaining steps gate on its boolean output. The URL itself is never
+      # written to an output — the ZAP step reads it directly through `with:`,
+      # where the `secrets` context is permitted.
+      - name: Resolve scan target
+        id: target
+        shell: bash
+        env:
+          TARGET_FROM_VARS: ${{ vars.SCAN_TARGET_URL }}
+          TARGET_FROM_SECRETS: ${{ secrets.SCAN_TARGET_URL }}
+        run: |
+          set -euo pipefail
+          if [ -n "${TARGET_FROM_VARS:-}" ] || [ -n "${TARGET_FROM_SECRETS:-}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No SCAN_TARGET_URL configured — skipping the ZAP baseline scan."
+          fi
+
       - name: Checkout
+        if: steps.target.outputs.configured == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: ZAP baseline scan
+        if: steps.target.outputs.configured == 'true'
         uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0
         with:
           target: ${{ vars.SCAN_TARGET_URL || secrets.SCAN_TARGET_URL }}
@@ -37,15 +62,17 @@ jobs:
           artifact_name: zap-baseline-report
           output_format: 'sarif,json,md,html'
 
+      # `always()` alone would also fire when the scan was skipped, uploading
+      # report files that were never produced.
       - name: Upload ZAP SARIF
-        if: always()
+        if: always() && steps.target.outputs.configured == 'true'
         uses: github/codeql-action/upload-sarif@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4.37.4
         with:
           sarif_file: zap_baseline_report.sarif
           category: zap-baseline
 
       - name: Upload ZAP reports
-        if: always()
+        if: always() && steps.target.outputs.configured == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: zap-baseline-report
