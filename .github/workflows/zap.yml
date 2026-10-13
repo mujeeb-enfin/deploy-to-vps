@@ -66,14 +66,14 @@ jobs:
       # report files that were never produced.
       - name: Upload ZAP SARIF
         if: always() && steps.target.outputs.configured == 'true'
-        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         with:
           sarif_file: zap_baseline_report.sarif
           category: zap-baseline
 
       - name: Upload ZAP reports
         if: always() && steps.target.outputs.configured == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: zap-baseline-report
           path: |
